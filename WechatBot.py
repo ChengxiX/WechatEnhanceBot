@@ -30,10 +30,12 @@ SELF_WXID = 'wxid_a0msbb5jvugs22'
 
 groups = []
 
-##################
-#需要按设备填写USER#
-##################
-USER = "zhong"
+
+file = open('Bot.conf', 'r')
+conf = json.load(file)
+file.close()
+
+USER = conf['USERNAME']
 
 
 WECHAT_PROFILE = rf"C:\Users\{USER}\Documents\WeChat Files"
@@ -109,55 +111,74 @@ def handle_response(data):
                             spy.send_text(_from, "机器人已关闭", at_wxid=_from_group_member)
                         elif content == "开始聊天":
                             variables['Bot'][_from] = random.choice(('Xiaosi', 'Qingyun'))
-                            spy.send_text(_from, "HI！", at_wxid=_from_group_member)
+                            spy.send_text(_from, "HI！我来了", at_wxid=_from_group_member)
                         elif content == "结束聊天" and variables['Bot'][_from] == 'Xiaosi':
                             variables['Bot'][_from] = ''
-                            spy.send_text(_from, "再见！", at_wxid=_from_group_member)
-                        elif content[:6] == "给TA送信":
+                            spy.send_text(_from, "今天就聊到这里吧！", at_wxid=_from_group_member)
+                        elif content[:5] == "给TA送信":
                             try:
                                 _uuid = variables['ano_uuid'][_from][-1]
                             except KeyError:
                                 variables['ano_uuid'][_from] = []
-                                _uuid = uuid.uuid4()
+                                _uuid = str(uuid.uuid4())
                                 variables['ano_uuid'][_from].append(_uuid)
-                            parameter = content.split('\n', 2)
-                            to = parameter[1]
-                            text = parameter[2]
-                            print(to, text)
-                            _flag = False
-                            for contact in contacts_list.contactDetails:
-                                if contact.nickname.str == to:
-                                    spy.send_text(contact.wxid.str, "【乡村熊】Ding~收到一条留言，请查看\n"+text+"\n\n如要回复请输入“回复 "+_uuid+" 回复内容”")
-                                    spy.send_text(_from, "发送完成，不要提醒TA哦~")
-                                    _flag = True
-                            if not _flag:
-                                spy.send_text(_from, "我的好友里面好像没有"+to+"，请检查输入，或者把我推荐给TA吧！")
-                        elif content[:2] == "回复":
-                            parameter = content.split(' ', 2)
-                            _uuid = parameter[1]
-                            text = parameter[2]
-                            _flag = False
-                            for key in variables['ano_uuid']:
-                                if uuid in variables['ano_uuid'][key]:
-                                    to = key
-                                    _flag = True
-                            if _flag:
-                                spy.send_text(to, text)
-                                spy.send_text(_from, "发送成功")
+                            try:
+                                parameter = content.split('\n', 2)
+                                to = parameter[1]
+                                text = parameter[2]
+                                print(to, text)
+                            except IndexError:
+                                spy.send_text(_from, "命令有问题，发送失败。请使用如下格式\n给TA送信\nTA的昵称\n内容")
                             else:
-                                spy.send_text(_from, "有些小问题，发送失败")
+                                _flag = False
+                                for contact in contacts_list.contactDetails:
+                                    if contact.nickname.str == to:
+                                        spy.send_text(contact.wxid.str, "【乡村熊】Ding~收到一条留言，请查看\n"+text+"\n\n如要回复请输入“\n回复\n"+_uuid+"\n回复内容”")
+                                        spy.send_text(_from, "发送完成，不要提醒TA哦~")
+                                        _flag = True
+                                if not _flag:
+                                    spy.send_text(_from, "我的好友里面好像没有"+to+"，请检查输入，或者把我推荐给TA吧！")
+                        elif content[:2] == "回复":
+                            try:
+                                parameter = content.split('\n', 2)
+                                print(parameter)
+                                _uuid = parameter[1]
+                                text = parameter[2]
+                                _flag = False
+                                for key in variables['ano_uuid']:
+                                    print(key)
+                                    print(variables['ano_uuid'][key])
+                                    if _uuid in variables['ano_uuid'][key]:
+                                        to = key
+                                        _flag = True
+                                if _flag:
+                                    for contact in contacts_list.contactDetails:
+                                        if contact.wxid == _from:
+                                            nick = contact.nickname.str
+                                    spy.send_text(to, "【乡村熊】Ding~收到一条回复，请查看\n" + text + "来自"+nick)
+                                    spy.send_text(_from, "发送成功")
+                                else:
+                                    spy.send_text(_from, "有些小问题，发送失败")
+                            except IndexError:
+                                spy.send_text(_from, "命令有问题，发送失败。请使用如下格式\n回复\nuuid\n回复内容")
                         elif content == "更新uuid":
-                            _uuid = uuid.uuid4()
+                            _uuid = str(uuid.uuid4())
                             variables['ano_uuid'][_from].append(_uuid)
                             spy.send_text(_from, "成功，新的uuid为"+_uuid)
-                        elif content[:7] == "给TA发短信":
-                            parameter = content.split('\n', 2)
-                            phonenum = parameter[1]
-                            text = parameter[2]
-                            for staff in conf['staff']:
-                                spy.send_text(staff, "短信请求：\n"+phonenum+"\n"+"【乡村熊】Ding~收到一条留言，请查看\n"+
-                                              text+"\n请勿回复，发送自私人手机。如要回复请添加乡村熊微信好友。如不想接到短信请回复TD")
-                            spy.send_text(_from, "已将请求发送至志愿者，不过请放心不会泄露来源。天知地知你知我知~", at_wxid=_from_group_member)
+                        elif content[:6] == "给TA发短信":
+                            try:
+                                parameter = content.split('\n', 2)
+                                phonenum = parameter[1]
+                                text = parameter[2]
+                            except IndexError:
+                                spy.send_text(_from, "命令有问题，发送失败。请使用如下格式\n给TA发短信\n手机号\n内容")
+                            else:
+                                for staff in conf['staff']:
+                                    spy.send_text(staff, "短信请求：\n"+phonenum+"\n"+"【乡村熊】Ding~收到一条留言，请查看\n"+
+                                              text+"\n请勿回复，发送自私人手机。如要回复请添加乡村熊微信好友，微信号XiangCunxiongBot。如不想接到短信请回复TD")
+                                spy.send_text(_from, "已将请求发送至志愿者，不过请放心不会泄露来源。天知地知你知我知~", at_wxid=_from_group_member)
+                        elif content == "帮助":
+                            spy.send_text(_from, "开启\n关闭\n开始聊天\n结束聊天\n给TA送信")
 
                         elif variables['Bot'][_from] == 'Xiaosi':
                             # 调用思科
@@ -182,7 +203,7 @@ def handle_response(data):
                                 spy.send_text(_from, results, at_wxid=_from_group_member)
 
                         else:
-                            spy.send_text(_from, "未知命令，回复“help”或“帮助”，或者“开始聊天”与乡村熊聊天", at_wxid=_from_group_member)
+                            spy.send_text(_from, "未知命令，回复“帮助”，或者“开始聊天”与乡村熊聊天", at_wxid=_from_group_member)
 
                     else:
                         # 待机状态
@@ -318,13 +339,9 @@ if __name__ == '__main__':
         v = json.dumps(variables)
         file.write(v)
         file.close()
-
-    file = open('Bot.conf', 'r')
-    conf = json.load(file)
-    file.close()
     
     scheduler = BackgroundScheduler()
-    scheduler.add_job(save_status, 'interval', seconds=300)
+    scheduler.add_job(save_status, 'interval', seconds=10)
     scheduler.start()
 
     spy = WeChatSpy(response_queue=my_response_queue, key=KEY, logger=logger)
