@@ -11,6 +11,8 @@ from queue import Queue
 import json
 import random
 from apscheduler.schedulers.background import BackgroundScheduler
+import re
+import uuid
 
 import BotAPIs
 
@@ -90,9 +92,9 @@ def handle_response(data):
             if _type == 1:
                 try:
                     # 文本消息
-                    print(_from, _to, _from_group_member, content)
-                    if content == "/ping":
-                        spy.send_text(_from, "Hello, 乡村熊2.0\n" + content, _from_group_member)
+                    print("from ", _from, "to ", _to, _from_group_member, content)
+                    if content == "ping":
+                        spy.send_text(_from, "Hello, 乡村熊2.0\n" + content, at_wxid=_from_group_member)
                         continue
                     if _from == SELF_WXID:
                         continue
@@ -100,16 +102,22 @@ def handle_response(data):
                         # 启动状态
                         if content[0] == "#":
                             continue
-                        elif content == "/关闭":
+                        elif content == "关闭":
                             variables['run'][_from] = False
-                            spy.send_text(_from, "机器人已关闭", _from_group_member)
-                        elif content == "/开始聊天":
+                            spy.send_text(_from, "机器人已关闭", at_wxid=_from_group_member)
+                        elif content == "开始聊天":
                             variables['Bot'][_from] = random.choice(('Xiaosi', 'Qingyun'))
-                            spy.send_text(_from, "HI！", _from_group_member)
-                        elif content == "/结束聊天" and variables['Bot'][_from] == 'Xiaosi':
+                            spy.send_text(_from, "HI！", at_wxid=_from_group_member)
+                        elif content == "结束聊天" and variables['Bot'][_from] == 'Xiaosi':
                             variables['Bot'][_from] = ''
-                            spy.send_text(_from, "再见！", _from_group_member)
-                        elif content[:6] == "/给TA送信":
+                            spy.send_text(_from, "再见！", at_wxid=_from_group_member)
+                        elif content[:6] == "给TA送信":
+                            try:
+                                _uuid = variables['ano_uuid'][_from][-1]
+                            except KeyError:
+                                variables['ano_uuid'][_from] = []
+                                _uuid = uuid.uuid4()
+                                variables['ano_uuid'][_from].append(_uuid)
                             parameter = content.split('\n', 2)
                             to = parameter[1]
                             text = parameter[2]
@@ -117,44 +125,68 @@ def handle_response(data):
                             _flag = False
                             for contact in contacts_list.contactDetails:
                                 if contact.nickname.str == to:
-                                    spy.send_text(contact.wxid.str, "【乡村熊】收到一条留言，请查看\n"+text)
-                                    spy.send_text(_from, "发送完成")
+                                    spy.send_text(contact.wxid.str, "【乡村熊】Ding~收到一条留言，请查看\n"+text+"\n\n如要回复请输入“回复 "+_uuid+" 回复内容”")
+                                    spy.send_text(_from, "发送完成，不要提醒TA哦~")
                                     _flag = True
                             if not _flag:
                                 spy.send_text(_from, "我的好友里面好像没有"+to+"，请检查输入，或者把我推荐给TA吧！")
-                        elif content[:7] == "/给TA发短信":
+                        elif content[:2] == "回复":
+                            parameter = content.split(' ', 2)
+                            _uuid = parameter[1]
+                            text = parameter[2]
+                            _flag = False
+                            for key in variables['ano_uuid']:
+                                if uuid in variables['ano_uuid'][key]:
+                                    to = key
+                                    _flag = True
+                            if _flag:
+                                spy.send_text(to, text)
+                                spy.send_text(_from, "发送成功")
+                            else:
+                                spy.send_text(_from, "有些小问题，发送失败")
+                        elif content == "更新uuid":
+                            _uuid = uuid.uuid4()
+                            variables['ano_uuid'][_from].append(_uuid)
+                            spy.send_text(_from, "成功，新的uuid为"+_uuid)
+                        elif content[:7] == "给TA发短信":
                             parameter = content.split('\n', 2)
                             phonenum = parameter[1]
                             text = parameter[2]
                             for staff in conf['staff']:
-                                spy.send_text(staff, "短信请求：\n"+phonenum+"\n"+text)
-                        else:
-                            if variables['Bot'][_from] == 'Xiaosi':
-                                # 调用思科
-                                content = content.replace("乡村熊", "小思")
-                                content = content.replace("\n", "{br}")
-                                res = BotAPIs.requestXiaosi(content)
-                                if res['message'] == 'success':
-                                    results = res['data']['info']['text']
-                                    results = results.replace("小思", "乡村熊")
-                                    results = results.replace("{br}", "\n")
-                                    spy.send_text(_from, results, _from_group_member)
+                                spy.send_text(staff, "短信请求：\n"+phonenum+"\n"+"【乡村熊】Ding~收到一条留言，请查看\n"+
+                                              text+"\n请勿回复，发送自私人手机。如要回复请添加乡村熊微信好友。如不想接到短信请回复TD")
+                            spy.send_text(_from, "已将请求发送至志愿者，不过请放心不会泄露来源。天知地知你知我知~", at_wxid=_from_group_member)
 
-                            elif variables['Bot'][_from] == 'Qingyun':
-                                # 调用青云
-                                content = content.replace("乡村熊", "菲菲")
-                                content = content.replace("\n", "{br}")
-                                res = BotAPIs.requestQingyun(content)
-                                if res['result'] == 0:
-                                    results = res['content']
-                                    results = results.replace("菲菲", "乡村熊")
-                                    results = results.replace("{br}", "\n")
-                                    spy.send_text(_from, results, _from_group_member)
+                        elif variables['Bot'][_from] == 'Xiaosi':
+                            # 调用思科
+                            content = content.replace("乡村熊", "小思")
+                            content = content.replace("\n", "{br}")
+                            res = BotAPIs.requestXiaosi(content)
+                            if res['message'] == 'success':
+                                results = res['data']['info']['text']
+                                results = results.replace("小思", "乡村熊")
+                                results = results.replace("{br}", "\n")
+                                spy.send_text(_from, results, at_wxid=_from_group_member)
+
+                        elif variables['Bot'][_from] == 'Qingyun':
+                            # 调用青云
+                            content = content.replace("乡村熊", "菲菲")
+                            content = content.replace("\n", "{br}")
+                            res = BotAPIs.requestQingyun(content)
+                            if res['result'] == 0:
+                                results = res['content']
+                                results = results.replace("菲菲", "乡村熊")
+                                results = results.replace("{br}", "\n")
+                                spy.send_text(_from, results, at_wxid=_from_group_member)
+
+                        else:
+                            spy.send_text(_from, "未知命令，回复“help”或“帮助”，或者“开始聊天”与乡村熊聊天", at_wxid=_from_group_member)
+
                     else:
                         # 待机状态
                         if not _from.endswith("@chatroom"):
                             spy.send_text(_from, "机器人未开启，如要开启请输入”/开启“")
-                        if content == "/开启":
+                        if content == "开启":
                             variables['run'][_from] = True
                             spy.send_text(_from, "机器人已开启")
                 except KeyError:
@@ -162,8 +194,8 @@ def handle_response(data):
             elif _type == 3:  # 图片消息
                 file_path = message.file
                 file_path = os.path.join(WECHAT_PROFILE, file_path)
-                time.sleep(10)
-                # spy.decrypt_image(file_path, "a.jpg")
+                time.sleep(3)
+                spy.decrypt_image(file_path, "a.jpg")
             elif _type == 43:  # 视频消息
                 pass
             elif _type == 49:  # XML报文消息
@@ -183,6 +215,12 @@ def handle_response(data):
                 obj = etree.XML(message.content.str)
                 encryptusername, ticket = obj.xpath("/msg/@encryptusername")[0], obj.xpath("/msg/@ticket")[0]
                 spy.accept_new_contact(encryptusername, ticket)  # 接收好友请求
+            elif _type == 10000:  # 判断是微信拍一拍系统提示
+                # 因为微信系统消息很多 因此需要用正则匹配消息内容进一步过滤拍一拍提示
+                m = re.search('".*" 拍了拍我', content)
+                if m:  # 搜索到了匹配的字符串 判断为拍一拍
+                    image_path = f"images/{random.randint(1, 7)}.jpg"  # 随机选一张回复用的图片
+                    spy.send_file(_from, image_path)  # 发送图片
     elif data.type == ACCOUNT_DETAILS:  # 登录账号详情
         if data.code:
             account_details = spy_pb2.AccountDetails()
@@ -272,7 +310,8 @@ if __name__ == '__main__':
     except FileNotFoundError:
         file = open('status.json', 'w')
         variables = {'run': {},
-                     'Bot': {}
+                     'Bot': {},
+                     'ano_uuid': {}
                      }
         v = json.dumps(variables)
         file.write(v)
