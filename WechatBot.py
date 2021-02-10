@@ -341,7 +341,7 @@ if __name__ == '__main__':
         file.close()
     
     scheduler = BackgroundScheduler()
-    scheduler.add_job(save_status, 'interval', seconds=10)
+    scheduler.add_job(save_status, 'interval', seconds=60)
     scheduler.start()
 
     spy = WeChatSpy(response_queue=my_response_queue, key=KEY, logger=logger)
