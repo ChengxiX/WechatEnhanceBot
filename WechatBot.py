@@ -1,17 +1,20 @@
 from PyWeChatSpy import WeChatSpy
 from PyWeChatSpy.command import *
+from PyWeChatSpy.proto import spy_pb2
 
 from lxml import etree
 import time
 import logging
-from PyWeChatSpy.proto import spy_pb2
 import os
 import shutil
 from queue import Queue
 import json
 import random
+from apscheduler.schedulers.background import BackgroundScheduler
 
 import BotAPIs
+
+
 
 logger = logging.getLogger(__file__)
 logger.setLevel(logging.DEBUG)
@@ -22,10 +25,13 @@ sh.setLevel(logging.INFO)
 logger.addHandler(sh)
 
 SELF_WXID = 'wxid_a0msbb5jvugs22'
-FILENAME = 'status.json'
 
 groups = []
+
+
 USER = "zhong"
+
+
 WECHAT_PROFILE = rf"C:\Users\{USER}\Documents\WeChat Files"
 PATCH_PATH = rf"C:\Users\{USER}\AppData\Roaming\Tencent\WeChat\patch"
 if not os.path.exists(WECHAT_PROFILE):
@@ -38,12 +44,17 @@ if not os.path.exists(PATCH_PATH):
         wf.write("")
 my_response_queue = Queue()
 
-def save_status(variables):
-    file = open(FILENAME, 'w')
+def save_status():
+    global variables
+    file = open('status.json', 'w')
     json.dump(variables, file)
     file.close()
+    print("Status Saved")
 
 def handle_response(data):
+    global variables
+    global contacts_list
+    global conf
     if data.type == PROFESSIONAL_KEY:
         if not data.code:
             logger.warning(data.message)
@@ -81,15 +92,16 @@ def handle_response(data):
                     # 文本消息
                     print(_from, _to, _from_group_member, content)
                     if content == "/ping":
-                        spy.send_text(_from, "Hello PyWeChatSpy3.0\n" + content, _from_group_member)
+                        spy.send_text(_from, "Hello, 乡村熊2.0\n" + content, _from_group_member)
+                        continue
                     if _from == SELF_WXID:
                         continue
-                    if variables['run'][_from] == 1:
+                    if variables['run'][_from]:
                         # 启动状态
                         if content[0] == "#":
                             continue
                         elif content == "/关闭":
-                            variables['run'][_from] = 0
+                            variables['run'][_from] = False
                             spy.send_text(_from, "机器人已关闭", _from_group_member)
                         elif content == "/开始聊天":
                             variables['Bot'][_from] = random.choice(('Xiaosi', 'Qingyun'))
@@ -97,41 +109,56 @@ def handle_response(data):
                         elif content == "/结束聊天" and variables['Bot'][_from] == 'Xiaosi':
                             variables['Bot'][_from] = ''
                             spy.send_text(_from, "再见！", _from_group_member)
-                        elif content[:5] == "/给TA送信":
-                            parameter = content.split(' ', 2)
+                        elif content[:6] == "/给TA送信":
+                            parameter = content.split('\n', 2)
                             to = parameter[1]
                             text = parameter[2]
-                            for contact_details in contact_details_list.contactDetails:  # 遍历联系人详情
-                                if contact_details.wechatId == to:
-                                    spy.send_text(contact_details.wxid, text)
-                            pass
+                            print(to, text)
+                            _flag = False
+                            for contact in contacts_list.contactDetails:
+                                if contact.nickname.str == to:
+                                    spy.send_text(contact.wxid.str, "【乡村熊】收到一条留言，请查看\n"+text)
+                                    spy.send_text(_from, "发送完成")
+                                    _flag = True
+                            if not _flag:
+                                spy.send_text(_from, "我的好友里面好像没有"+to+"，请检查输入，或者把我推荐给TA吧！")
+                        elif content[:7] == "/给TA发短信":
+                            parameter = content.split('\n', 2)
+                            phonenum = parameter[1]
+                            text = parameter[2]
+                            for staff in conf['staff']:
+                                spy.send_text(staff, "短信请求：\n"+phonenum+"\n"+text)
                         else:
                             if variables['Bot'][_from] == 'Xiaosi':
                                 # 调用思科
-                                if "乡村熊" in content:
-                                    content = content.replace("乡村熊", "小思")
+                                content = content.replace("乡村熊", "小思")
+                                content = content.replace("\n", "{br}")
                                 res = BotAPIs.requestXiaosi(content)
                                 if res['message'] == 'success':
                                     results = res['data']['info']['text']
                                     results = results.replace("小思", "乡村熊")
+                                    results = results.replace("{br}", "\n")
                                     spy.send_text(_from, results, _from_group_member)
 
                             elif variables['Bot'][_from] == 'Qingyun':
                                 # 调用青云
-                                if "乡村熊" in content:
-                                    content = content.replace("乡村熊", "菲菲")
+                                content = content.replace("乡村熊", "菲菲")
+                                content = content.replace("\n", "{br}")
                                 res = BotAPIs.requestQingyun(content)
                                 if res['result'] == 0:
                                     results = res['content']
                                     results = results.replace("菲菲", "乡村熊")
+                                    results = results.replace("{br}", "\n")
                                     spy.send_text(_from, results, _from_group_member)
                     else:
                         # 待机状态
+                        if not _from.endswith("@chatroom"):
+                            spy.send_text(_from, "机器人未开启，如要开启请输入”/开启“")
                         if content == "/开启":
-                            variables['run'][_from] = 1
+                            variables['run'][_from] = True
                             spy.send_text(_from, "机器人已开启")
                 except KeyError:
-                    variables['run'][_from] = 1
+                    variables['run'][_from] = True
             elif _type == 3:  # 图片消息
                 file_path = message.file
                 file_path = os.path.join(WECHAT_PROFILE, file_path)
@@ -167,12 +194,14 @@ def handle_response(data):
     elif data.type == CONTACTS_LIST:  # 联系人列表
         if data.code:
             contacts_list = spy_pb2.Contacts()
+            print('CONTACTS_LIST')
             contacts_list.ParseFromString(data.bytes)
             for contact in contacts_list.contactDetails:  # 遍历联系人列表
                 wxid = contact.wxid.str  # 联系人wxid
                 nickname = contact.nickname.str  # 联系人昵称
                 remark = contact.remark.str  # 联系人备注
-                print(wxid, nickname, remark)
+                id = contact.wechatId
+                print(wxid, nickname, remark, id)
                 if wxid.endswith("chatroom"):  # 群聊
                     groups.append(wxid)
             # spy.get_contact_details("20646587964@chatroom")  # 获取群聊详情
@@ -181,12 +210,12 @@ def handle_response(data):
     elif data.type == CONTACT_DETAILS:
         if data.code:
             contact_details_list = spy_pb2.Contacts()
+            print('CONTACT_DETAILS')
             contact_details_list.ParseFromString(data.bytes)
             for contact_details in contact_details_list.contactDetails:  # 遍历联系人详情
                 wxid = contact_details.wxid.str  # 联系人wxid
                 nickname = contact_details.nickname.str  # 联系人昵称
                 remark = contact_details.remark.str  # 联系人备注
-                id = contact_details.wechatId
                 if wxid.endswith("chatroom"):  # 判断是否为群聊
                     group_member_list = contact_details.groupMemberList  # 群成员列表
                     member_count = group_member_list.memberCount  # 群成员数量
@@ -232,19 +261,31 @@ def handle_response(data):
 
 
 if __name__ == '__main__':
-    KEY = "84719542936131b5991c077eadd7e8d4"
+    file = open('key.txt', 'r')
+    KEY = file.read()
+    file.close()
+    
     try:
-        file = open(FILENAME, 'r')
+        file = open('status.json', 'r')
         variables = json.load(file)
         file.close()
     except FileNotFoundError:
-        file = open(FILENAME, 'w')
+        file = open('status.json', 'w')
         variables = {'run': {},
                      'Bot': {}
                      }
         v = json.dumps(variables)
         file.write(v)
         file.close()
+
+    file = open('Bot.conf', 'r')
+    conf = json.load(file)
+    file.close()
+    
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(save_status, 'interval', seconds=300)
+    scheduler.start()
+
     spy = WeChatSpy(response_queue=my_response_queue, key=KEY, logger=logger)
     pid = spy.run(r"C:\Program Files (x86)\Tencent\WeChat\WeChat.exe")
     while True:
