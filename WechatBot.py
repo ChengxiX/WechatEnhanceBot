@@ -30,7 +30,9 @@ SELF_WXID = 'wxid_a0msbb5jvugs22'
 
 groups = []
 
-
+##################
+#需要按设备填写USER#
+##################
 USER = "zhong"
 
 
@@ -185,7 +187,7 @@ def handle_response(data):
                     else:
                         # 待机状态
                         if not _from.endswith("@chatroom"):
-                            spy.send_text(_from, "机器人未开启，如要开启请输入”/开启“")
+                            spy.send_text(_from, "机器人未开启，如要开启请输入”开启“")
                         if content == "开启":
                             variables['run'][_from] = True
                             spy.send_text(_from, "机器人已开启")
