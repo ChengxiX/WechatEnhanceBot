@@ -10,3 +10,4 @@ venv
 *.jpg
 key.txt
 status.json
+__pycache__
