@@ -51,14 +51,11 @@ if not os.path.exists(PATCH_PATH):
 my_response_queue = Queue()
 
 def save_status():
-    global old_variables
     global variables
-    if variables != old_variables:
-        file = open('status.json', 'w')
-        json.dump(variables, file)
-        file.close()
-        print("Status Saved")
-        old_variables = variables
+    file = open('status.json', 'w')
+    json.dump(variables, file)
+    file.close()
+    print("Status Saved")
 
 def handle_response(data):
     try:
@@ -110,6 +107,8 @@ def handle_response(data):
                         if variables['run'][_from]:
                             # 启动状态
                             if content[0] == "#":
+                                for staff in conf['staff']:
+                                    spy.send_text(staff, "留言，来自"+_from+content)
                                 continue
                             elif content == "关闭":
                                 variables['run'][_from] = False
@@ -191,6 +190,13 @@ def handle_response(data):
                             elif content == "帮助":
                                 spy.send_text(_from, "命令列表：\n\n开启\n关闭\n开始聊天\n结束聊天\n给TA送信\n回复\n更新uuid\n给TA发短信\n帮助")
 
+                            elif content == '斗图':
+                                variables['DouTu'][_from] = True
+                                spy.send_text(_from, "斗图模式开启", at_wxid=_from_group_member)
+                            elif content == '斗图关闭':
+                                variables['DouTu'][_from] = False
+                                spy.send_text(_from, "斗图模式关闭", at_wxid=_from_group_member)
+
                             elif variables['Bot'][_from] == 'Xiaosi':
                                 # 调用思科
                                 content = content.replace("乡村熊", "小思")
@@ -228,7 +234,6 @@ def handle_response(data):
                 elif _type == 3:  # 图片消息
                     file_path = message.file
                     file_path = os.path.join(WECHAT_PROFILE, file_path)
-                    time.sleep(3)
                     spy.decrypt_image(file_path, "a.jpg")
                 elif _type == 43:  # 视频消息
                     pass
@@ -255,6 +260,18 @@ def handle_response(data):
                     if m:  # 搜索到了匹配的字符串 判断为拍一拍
                         image_path = f"images/{random.randint(1, 7)}.jpg"  # 随机选一张回复用的图片
                         spy.send_file(_from, image_path)  # 发送图片
+                elif _type == 47:
+                    try:
+                        if variables['DouTu'][_from]:
+                            image_path = f"faces/{random.randint(1, 21)}.jpg"
+                            spy.send_file(_from, image_path)
+                        else:
+                            spy.send_text(_from, "想和我斗图吗？开启斗图模式回复“斗图”", at_wxid=_from_group_member)
+                    except KeyError:
+                        variables['DouTu'][_from] = False
+
+                #else:
+                    #print(_type, _from, _to, content)
         elif data.type == ACCOUNT_DETAILS:  # 登录账号详情
             if data.code:
                 account_details = spy_pb2.AccountDetails()
@@ -352,14 +369,14 @@ if __name__ == '__main__':
         file = open('status.json', 'w')
         variables = {'run': {},
                      'Bot': {},
+                     'DouTu': {},
                      'ano_uuid': {}
                      }
         v = json.dumps(variables)
         file.write(v)
         file.close()
-    old_variables = variables
     scheduler = BackgroundScheduler()
-    scheduler.add_job(save_status, 'interval', seconds=60)
+    scheduler.add_job(save_status, 'interval', seconds=120)
     scheduler.start()
 
     spy = WeChatSpy(response_queue=my_response_queue, key=KEY, logger=logger)
