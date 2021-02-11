@@ -377,10 +377,10 @@ if __name__ == '__main__':
         file.close()
     scheduler = BackgroundScheduler()
     scheduler.add_job(save_status, 'interval', seconds=120)
-    scheduler.start()
-
     spy = WeChatSpy(response_queue=my_response_queue, key=KEY, logger=logger)
     pid = spy.run(r"C:\Program Files (x86)\Tencent\WeChat\WeChat.exe")
+    scheduler.add_job(spy.get_contacts, 'interval', seconds=300)
+    scheduler.start()
     while True:
         data = my_response_queue.get()
         handle_response(data)
