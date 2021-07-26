@@ -108,7 +108,7 @@ def handle_response(data):
                             # 启动状态
                             if content[0] == "#":
                                 for staff in conf['staff']:
-                                    spy.send_text(staff, "留言，来自"+_from+content)
+                                    spy.send_text(staff, "留言，来自"+_from+"\n"+content)
                                 continue
                             elif content == "关闭":
                                 variables['run'][_from] = False
@@ -162,7 +162,7 @@ def handle_response(data):
                                             if contact.wxid == _from:
                                                 nick = contact.nickname.str
                                                 _flag2 = True
-                                        if _flag2:
+                                        if nick:
                                             spy.send_text(to, "【乡村熊】Ding~收到一条回复，请查看\n" + text + "来自" + nick)
                                         else:
                                             spy.send_text(to, "【乡村熊】Ding~收到一条回复，请查看\n" + text)
@@ -196,6 +196,21 @@ def handle_response(data):
                             elif content == '斗图关闭':
                                 variables['DouTu'][_from] = False
                                 spy.send_text(_from, "斗图模式关闭", at_wxid=_from_group_member)
+
+                            elif content == "查看朋友":
+                                text = ''
+                                for contact in contacts_list.contactDetails:
+                                    nick = contact.nickname.str
+                                    if len(nick) < 3:
+                                        text += nick
+                                        text += '\n'
+                                    elif len(nick) == 3 or len(nick) == 4:
+                                        text += nick[0]+'*'+nick[2]
+                                        text += '\n'
+                                    elif len(nick) > 4:
+                                        text += nick[:2]+'***'+nick[-3:]
+                                        text += '\n'
+                                spy.send_text(_from, text)
 
                             elif variables['Bot'][_from] == 'Xiaosi':
                                 # 调用思科
@@ -263,7 +278,7 @@ def handle_response(data):
                 elif _type == 47:
                     try:
                         if variables['DouTu'][_from]:
-                            image_path = f"faces/{random.randint(1, 21)}.jpg"
+                            image_path = f"faces/{random.randint(1, 34)}.jpg"
                             spy.send_file(_from, image_path)
                         else:
                             spy.send_text(_from, "想和我斗图吗？开启斗图模式回复“斗图”", at_wxid=_from_group_member)
@@ -375,6 +390,7 @@ if __name__ == '__main__':
         v = json.dumps(variables)
         file.write(v)
         file.close()
+
     scheduler = BackgroundScheduler()
     scheduler.add_job(save_status, 'interval', seconds=120)
     spy = WeChatSpy(response_queue=my_response_queue, key=KEY, logger=logger)
